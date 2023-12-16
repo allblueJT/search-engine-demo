@@ -9,7 +9,7 @@ mecab*
 wandb/
 
 *.log
-*_debug.sh
+# *_debug.sh
 mlruns/
 
 src/*.ipynb

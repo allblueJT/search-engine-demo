@@ -1,15 +1,15 @@
 from crawler import Crawler
-from tqdm import tqdm
 
 class TeachCrawler(Crawler):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, args):
+        super().__init__(args)
         self.name = '中科大教务处'
         self.main_url = 'https://www.teach.ustc.edu.cn/'
+        self.main_page = 'https://www.teach.ustc.edu.cn/main.htm'
         self.src_store_url = 'https://www.teach.ustc.edu.cn/download/all'
         self.page_url = 'https://www.teach.ustc.edu.cn/download/all/page/{id}'
         
-    def get_src_urls(self, url):
+    def _get_src_urls(self, url):
         element = self.get_etree_html(url)
 
         max_page = element.xpath("//a[@class='page-numbers' and position()=last()-1]")[0]
@@ -44,5 +44,11 @@ class TeachCrawler(Crawler):
 
 
 if __name__ == '__main__':
-    tc = TeachCrawler()
+    import sys
+    sys.path.append('..')
+    from utils import get_args
+    
+    args = get_args()
+    
+    tc = TeachCrawler(args)
     tc.crawl_src(save_path='../cache/teach')

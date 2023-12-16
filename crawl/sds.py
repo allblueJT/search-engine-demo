@@ -1,14 +1,14 @@
 from crawler import Crawler
-from tqdm import tqdm
 
 class DSCrawler(Crawler):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, args):
+        super().__init__(args)
         self.name = '大数据学院官网'
         self.main_url = 'https://sds.ustc.edu.cn/'
+        self.main_page = 'https://sds.ustc.edu.cn/main.htm'
         self.src_store_url = 'https://sds.ustc.edu.cn/15443/list.htm'
         
-    def get_src_urls(self, url):
+    def _get_src_urls(self, url):
         element = self.get_etree_html(url)
 
         src_list = element.xpath("//div[@class='wenzhangliebiao']")[0]
@@ -41,5 +41,11 @@ class DSCrawler(Crawler):
     
 
 if __name__ == '__main__':
-    dc = DSCrawler()
+    import sys
+    sys.path.append('..')
+    from utils import get_args
+    
+    args = get_args()
+    
+    dc = DSCrawler(args)
     dc.crawl_src(save_path='../cache/sds', host_url=dc.main_url)
