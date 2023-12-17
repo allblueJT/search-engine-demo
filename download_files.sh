@@ -1,4 +1,4 @@
-crawlers=("scs.py" "sds.py" "teach.py" "mathematics.py" "sist.py")
+crawlers=("scs.py" "sds.py" "teach.py" "mathematics.py" "sist.py" "sse.py" "press.py" "grad.py")
 
 cd crawl
 
