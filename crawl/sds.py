@@ -7,8 +7,11 @@ class DSCrawler(Crawler):
         self.main_url = 'https://sds.ustc.edu.cn/'
         self.main_page = 'https://sds.ustc.edu.cn/main.htm'
         self.src_store_url = 'https://sds.ustc.edu.cn/15443/list.htm'
-        
-    def _get_src_urls(self, url, page_url=None):
+        self.page_url = None
+
+        self.check_init()
+
+    def get_page_src_urls(self, url):
         element = Crawler.get_etree_html(url)
 
         src_list = element.xpath("//div[@class='wenzhangliebiao']")[0]
@@ -20,7 +23,7 @@ class DSCrawler(Crawler):
     def _get_src_from_page(self, element):
                 
         # node a
-        a_src = element.xpath("//div[@class='read']//a")
+        a_src = element.xpath("//div[@class='read']//a[@sudyfile-attr]")
         a_href_src = [a.attrib['href'] for a in a_src]
         a_title_src = [eval(a.attrib['sudyfile-attr'])['title'] for a in a_src]
         

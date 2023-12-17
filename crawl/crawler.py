@@ -5,6 +5,7 @@ import random
 import io
 import logging
 import os, sys
+import re
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 
@@ -37,6 +38,9 @@ class Crawler(ABC):
         
         self.args = args
         self.page_url = None
+        self.page_num_xpath = None
+        self.page_script = False    # whether max page num is in the <script>
+        self.add_title = None      # TO DO
         # self.store_2_page_list_xpath = None
         # self.download_page_2_file_xpath = None
         
@@ -57,6 +61,20 @@ class Crawler(ABC):
         html = response.content
         return etree.HTML(html)
     
+    @staticmethod
+    def clean_text(text):
+        return text.replace(' ', '').replace('\n', '').replace('\r', ''). \
+            replace('<br>', '_').replace('<br/>', '_').replace('<br />', '_').replace('\t', '_')
+    
+    def check_init(self):
+        if isinstance(self.src_store_url, str):
+            assert isinstance(self.page_url, str or type(None)), f"Inconsistent shape of src_store_url and page_url!"
+        elif isinstance(self.src_store_url, list or tuple):
+            assert isinstance(self.page_url, list or tuple) and len(self.src_store_url) == len(self.page_url), \
+                f"Inconsistent shape of src_store_url and page_url!"
+        else:
+            raise AssertionError("Invalid type of src_store_url! Str | List[Str] expected")
+    
     def download_src(self, url, ext, name, save_path='./'):
         self.sleep()
         if not os.path.exists(save_path):
@@ -68,6 +86,8 @@ class Crawler(ABC):
         
         src = requests.get(url)
         content = io.BytesIO(src.content)
+        
+        name = Crawler.clean_text(name)
         if name.split('.')[-1] not in self.src_ext:
             name = name + '.' + ext
         if name in os.listdir(save_path):
@@ -99,13 +119,13 @@ class Crawler(ABC):
             ext = url.split('.')[-1]
             if self.args.verbose:
                 logger.info(f"Downloading from src page {cnt} - {url} - Current EXT: {ext}")
+                
             if ext not in self.src_ext:     # url directs to a page but not src file
                 cur_src_urls, cur_src_names = self.get_src_from_page(url, host_url=host_url)
                 if self.args.verbose:
                     logger.info(f"Files of current page: {list(zip(cur_src_names, cur_src_urls))}")
                 for url_, name_ in zip(cur_src_urls, cur_src_names):
                     ext_ = url_.split('.')[-1]
-                    # print(url_)
                     self.download_src(url_, ext_, name_, save_path)
             else:
                 self.download_src(url, ext, name, save_path)
@@ -118,7 +138,7 @@ class Crawler(ABC):
         if isinstance(url, list or tuple):
             src_urls, src_names = [], []
             for url_, page_url_ in zip(url, self.page_url):
-                logger.info(f"getting the src_urls list of center {url_}...")
+                logger.info(f"Getting the src_urls list of center {url_}...")
                 src_urls_, src_names_ = [], []
                 src_urls_, src_names_ = self._get_src_urls(url_, page_url_)
                 src_urls += src_urls_
@@ -128,8 +148,38 @@ class Crawler(ABC):
         src_urls = self.process_urls(src_urls, host_url)
         return src_urls, src_names
     
-    @abstractmethod 
     def _get_src_urls(self, url, page_url=None):
+        element = self.get_etree_html(url)
+
+        if page_url is None:
+            src_urls, src_names = self.get_page_src_urls(url)
+        else:
+            if self.page_script:
+                script = element.xpath(self.page_num_xpath)[1].text
+                
+                max_page = int(re.search("total.*?'(\d+)'", script).group(1))
+            else:
+                max_page = element.xpath(self.page_num_xpath)[0]
+                max_page = int(max_page.text)
+            
+            
+            if self.args.debug:
+                max_page = min(max_page, 2)
+                logger.info(f"{max_page} pages totally. Set to {max_page} under debug mode.")
+                
+            src_urls, src_names = [], []
+            for id in range(1, max_page + 1):
+                page_src_urls, page_names = self.get_page_src_urls(page_url.format(id=id))
+                if self.args.verbose:
+                    print(f'page: {id}')
+                    print(f'page_names: {page_names}')
+                src_urls += page_src_urls
+                src_names += page_names
+        
+        return src_urls, src_names
+    
+    @abstractmethod 
+    def get_page_src_urls(self, url):
         raise NotImplementedError()
         
     @abstractmethod 
