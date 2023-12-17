@@ -8,8 +8,8 @@ class DSCrawler(Crawler):
         self.main_page = 'https://sds.ustc.edu.cn/main.htm'
         self.src_store_url = 'https://sds.ustc.edu.cn/15443/list.htm'
         
-    def _get_src_urls(self, url):
-        element = self.get_etree_html(url)
+    def _get_src_urls(self, url, page_url=None):
+        element = Crawler.get_etree_html(url)
 
         src_list = element.xpath("//div[@class='wenzhangliebiao']")[0]
         src_urls = src_list.xpath("//ul[@class='wp_article_list']/li//a/@href")
@@ -17,11 +17,8 @@ class DSCrawler(Crawler):
         
         return src_urls, src_names
         
-    def get_src_from_page(self, url, host_url=None):
-        assert host_url is not None or not url.startswith('/'), f"{url} has no prefix while host_url is None!"
-        
-        element = self.get_etree_html(url)
-        
+    def _get_src_from_page(self, element):
+                
         # node a
         a_src = element.xpath("//div[@class='read']//a")
         a_href_src = [a.attrib['href'] for a in a_src]
@@ -34,9 +31,7 @@ class DSCrawler(Crawler):
         
         all_hrefs = a_href_src + div_href_src
         all_titles = a_title_src + div_title_src
-        if host_url is not None:
-            all_hrefs = [host_url + href if href.startswith('/') else href for href in all_hrefs]
-        
+
         return all_hrefs, all_titles
     
 

@@ -22,5 +22,6 @@ def get_logger(name, log_filename=None):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", type=bool, default=False)
+    parser.add_argument("--verbose", type=bool, default=True)
     args = parser.parse_args()
     return args

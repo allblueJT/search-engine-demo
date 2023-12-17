@@ -32,14 +32,15 @@ class Crawler(ABC):
         self.main_url = None
         self.main_page = None
         self.src_store_url = None
-        self.src_ext = ['doc', 'docx', 'pdf', 'txt', 'xlsx', 'xls', 'ppt', 'zip', 'tar', '7z', 'png', 'jpg', 'gif', 'jpeg']
+        self.src_ext = ['doc', 'docx', 'pdf', 'txt', 'xlsx', 'xls', 'ppt', 'zip', 'tar', '7z', 'rar',
+                        'png', 'jpg', 'gif', 'jpeg']
         
         self.args = args
         self.page_url = None
         # self.store_2_page_list_xpath = None
         # self.download_page_2_file_xpath = None
         
-        self.visit_cnt = 0      # to control QPS
+        self.visit_cnt = 0      # to control QPS, not used currently
         self.desc = "Crawler for {name}\n" \
                     "Home page: {main_page}"
         
@@ -60,7 +61,10 @@ class Crawler(ABC):
         self.sleep()
         if not os.path.exists(save_path):
             os.mkdir(save_path)
-        self.visit_cnt = Crawler.sleep(self.visit_cnt)
+        if ext not in self.src_ext:
+            logger.info(f"Illegal ext to download: {url}")
+            return
+        # self.visit_cnt = Crawler.sleep(self.visit_cnt)
         
         src = requests.get(url)
         content = io.BytesIO(src.content)
@@ -75,49 +79,69 @@ class Crawler(ABC):
             f.write(content.read())
         logger.info(f'>>> {fname} has been downloaded <<<')
         
-    def get_src_from_store(self, src_urls, src_names, host_url=None, save_path='./'):
+    def process_urls(self, urls, host_url):
+        if isinstance(urls, list or tuple):
+            assert host_url is not None or all([not url.startswith('/') for url in urls]), \
+                f"{urls} contains some urls without prefix while host_url is None!"
+        else:
+            assert host_url is not None or not urls.startswith('/'), \
+                f"{urls} has no prefix while host_url is None!"
         if host_url is not None:
-            src_urls = [host_url + url for url in src_urls]
-            
+            if isinstance(urls, str):
+                urls = host_url + urls if urls.startswith('/') else urls
+            else:
+                urls = [host_url + url if url.startswith('/') else url for url in urls]
+        return urls
+        
+    def get_src_from_store(self, src_urls, src_names, host_url=None, save_path='./'):
+
         for cnt, (url, name) in enumerate(zip(src_urls, src_names)):
             ext = url.split('.')[-1]
-            print('ext: ', ext)
+            if self.args.verbose:
+                logger.info(f"Downloading from src page {cnt} - {url} - Current EXT: {ext}")
             if ext not in self.src_ext:     # url directs to a page but not src file
                 cur_src_urls, cur_src_names = self.get_src_from_page(url, host_url=host_url)
-                cur_src_urls = [host_url + url_ if url_.startswith('/') else url_ for url_ in cur_src_urls]
-                # print('doc name: ', cur_src_names)
-                # print('doc urls: ', cur_src_urls)
+                if self.args.verbose:
+                    logger.info(f"Files of current page: {list(zip(cur_src_names, cur_src_urls))}")
                 for url_, name_ in zip(cur_src_urls, cur_src_names):
                     ext_ = url_.split('.')[-1]
                     # print(url_)
                     self.download_src(url_, ext_, name_, save_path)
             else:
                 self.download_src(url, ext, name, save_path)
+            
             if self.args.debug and cnt >= 1:
                 break
     
-    def get_src_urls(self, url):
+    def get_src_urls(self, url, host_url=None):
         # get src pages from the download center(s)
         if isinstance(url, list or tuple):
             src_urls, src_names = [], []
-            for url_ in url:
+            for url_, page_url_ in zip(url, self.page_url):
                 logger.info(f"getting the src_urls list of center {url_}...")
                 src_urls_, src_names_ = [], []
-                src_urls, src_names = self._get_src_urls(url_)
+                src_urls_, src_names_ = self._get_src_urls(url_, page_url_)
                 src_urls += src_urls_
                 src_names += src_names_
         else:
-            src_urls, src_names = self._get_src_urls(url)
+            src_urls, src_names = self._get_src_urls(url, self.page_url)
+        src_urls = self.process_urls(src_urls, host_url)
         return src_urls, src_names
     
     @abstractmethod 
-    def _get_src_urls(self, url):
+    def _get_src_urls(self, url, page_url=None):
         raise NotImplementedError()
         
     @abstractmethod 
-    def get_src_from_page(self, url, host_url=None):
+    def _get_src_from_page(self, element):
         raise NotImplementedError()
     
+    def get_src_from_page(self, url, host_url=None):
+        url = self.process_urls(url, host_url)
+        element = Crawler.get_etree_html(url)
+        src_urls, src_names = self._get_src_from_page(element)
+        src_urls = self.process_urls(src_urls, host_url)
+        return src_urls, src_names
     # @abstractmethod 
     # def get_nav_item(self, url):
     #     raise NotImplementedError()
@@ -128,7 +152,8 @@ class Crawler(ABC):
             return
         logger.info(f"Downloading src files for {self.name}...")
         
-        src_urls, src_names = self.get_src_urls(self.src_store_url)
+        src_urls, src_names = self.get_src_urls(self.src_store_url, host_url)
+        logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
         self.get_src_from_store(src_urls, src_names, host_url, save_path)
         
         logger.info(f"Done")

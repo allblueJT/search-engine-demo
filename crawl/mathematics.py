@@ -1,15 +1,14 @@
 from crawler import Crawler
 
-class SCSCrawler(Crawler):
+class MathCrawler(Crawler):
     def __init__(self, args):
         super().__init__(args)
-        self.name = '网络空间安全学院'
-        self.main_url = 'https://cybersec.ustc.edu.cn/'
-        self.main_page = 'https://cybersec.ustc.edu.cn/main.htm'
+        self.name = '数学科学学院'
+        self.main_url = 'https://math.ustc.edu.cn/'
+        self.main_page = 'https://math.ustc.edu.cn/main.htm'
         self.src_store_url = [
-            'https://cybersec.ustc.edu.cn/zlxz_23830/list.htm',     # 研究生
-            'https://cybersec.ustc.edu.cn/zlxz/list.htm',           # 本科生
-            'https://cybersec.ustc.edu.cn/zlxz_34997/list.htm',     # 学工
+            'https://math.ustc.edu.cn/bksjy/list.htm',     # 研究生
+            'https://math.ustc.edu.cn/yjsjy/list.htm',           # 本科生
         ]
         self.page_url = [None] * len(self.src_store_url)
         # self.max_page_num_xpath = None
@@ -19,16 +18,15 @@ class SCSCrawler(Crawler):
         
     def _get_src_urls(self, url, page_url=None):
         element = Crawler.get_etree_html(url)
-        a_src = element.xpath("//div[@id='wp_news_w50']//a")
-        # div_title_src = element.xpath("//div[@class='view_bg']//a//div[@class='fl text txtov']")
+        a_src = element.xpath("//ul[@class='wp_article_list']//span[@class='Article_Title']//a")
         src_urls = [a.attrib['href'] for a in a_src]
-        # src_names = [div.text for div in div_title_src]
         src_names = [""] * len(src_urls)
 
         return src_urls, src_names
             
+            
     def _get_src_from_page(self, element):
-        page_src_list = element.xpath("//div[@class='text']//a")
+        page_src_list = element.xpath("//div[@class='entry']//a")
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [eval(a.attrib['sudyfile-attr'])['title'] for a in page_src_list]
         
@@ -41,5 +39,5 @@ if __name__ == '__main__':
     
     args = get_args()
     
-    scs = SCSCrawler(args)
-    scs.crawl_src(save_path='../cache/scs', host_url=scs.main_url)
+    math = MathCrawler(args)
+    math.crawl_src(save_path='../cache/math', host_url=math.main_url)
