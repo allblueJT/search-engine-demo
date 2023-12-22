@@ -12,5 +12,5 @@ wandb/
 # *_debug.sh
 mlruns/
 
-src/*.ipynb
-crawl/demo.ipynb
+*.ipynb
+*test.py

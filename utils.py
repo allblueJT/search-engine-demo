@@ -19,9 +19,14 @@ def get_logger(name, log_filename=None):
         
     return logger
     
-def get_args():
+def get_args(args={}):
+    args = argparse.Namespace(**args)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", type=bool, default=False)
-    parser.add_argument("--verbose", type=bool, default=True)
-    args = parser.parse_args()
+    parser.add_argument("--save_dir", type=str, default='./cache')
+    parser.add_argument("--use_hbase", action="store_true", type=bool)
+    parser.add_argument("--multi_threads", action="store_true", type=bool)
+    parser.add_argument("--verbose", action="store_true", type=bool)
+    parser.add_argument("--debug", action="store_true", type=bool)
+    args = parser.parse_args(namespace=args)
+    logging.info(args)
     return args

@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler, URLContent
 
 class PressCrawler(Crawler):
     def __init__(self, args):
@@ -18,6 +18,9 @@ class PressCrawler(Crawler):
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
+        self.title_xpath = "//h1[@class='title']"
+        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.date_xpath = "//div[@class='submitted']/text()"
         
         self.check_init()
             
@@ -26,8 +29,10 @@ class PressCrawler(Crawler):
         page_src_list = element.xpath("//div[contains(@class,'node-article')]//a")
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [a.text for a in page_src_list]
-        
-        return src_urls, src_names
+        src_date = element.xpath(self.date_xpath)
+        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_names, src_date)]
+
+        return rslt
             
     def _get_src_from_page(self, element):
         page_src_list = element.xpath("//div[@class='wp_articlecontent']//a[@sudyfile-attr]")

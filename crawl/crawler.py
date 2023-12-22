@@ -8,6 +8,8 @@ import os, sys
 import re
 from abc import ABC, abstractmethod
 from tqdm import tqdm
+from typing import List, Dict
+from database import USTCHBase
 
 sys.path.append("..")
 
@@ -15,17 +17,33 @@ from utils import get_logger, get_args
 
 logger = get_logger(__name__, 'crawler.log')
 
-class Sleep:
-    def __init__(self, func):
-        self.func = func
-        self.visit_cnt = 0
+# class Sleep:
+#     def __init__(self, func):
+#         self.func = func
+#         self.visit_cnt = 0
     
-    def __call__(self, *args, **kwargs):
-        if self.visit_cnt > 4:
-            time.sleep(2 + random.random() * 4)
-        else:
-            self.visit_cnt += 1
-        self.func(*args, **kwargs)
+#     def __call__(self, *args, **kwargs):
+#         if self.visit_cnt > 4:
+#             time.sleep(2 + random.random() * 4)
+#         else:
+#             self.visit_cnt += 1
+#         self.func(*args, **kwargs)
+
+class URLContent:
+    def __init__(self, url: str, date: str = None, title: str = None, article: str = None, file: bytes = None):
+        self.url = url
+        self._date = date
+        self._title = title
+        self._article = article
+        self._file = file
+        
+    @property
+    def date(self):
+        return self._data
+    @date.setter
+    def date(self, d):
+        self._date = d.encode('utf-8')
+    
 
 class Crawler(ABC):
     def __init__(self, args):
@@ -43,6 +61,9 @@ class Crawler(ABC):
         self.add_title = None      # TO DO
         # self.store_2_page_list_xpath = None
         # self.download_page_2_file_xpath = None
+        self.title_xpath = None
+        self.date_xpath = None
+        self.article_xpath = None
         
         self.visit_cnt = 0      # to control QPS, not used currently
         self.desc = "Crawler for {name}\n" \
@@ -62,18 +83,33 @@ class Crawler(ABC):
         return etree.HTML(html)
     
     @staticmethod
-    def clean_text(text):
+    def clean_title(text):
         return text.replace(' ', '').replace('\n', '').replace('\r', ''). \
             replace('<br>', '_').replace('<br/>', '_').replace('<br />', '_').replace('\t', '_')
+    @staticmethod
+    def clean_article(text):
+        return text.strip().replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n').replace('\t', ' ').strip()
     
     def check_init(self):
         if isinstance(self.src_store_url, str):
-            assert isinstance(self.page_url, str or type(None)), f"Inconsistent shape of src_store_url and page_url!"
-        elif isinstance(self.src_store_url, list or tuple):
-            assert isinstance(self.page_url, list or tuple) and len(self.src_store_url) == len(self.page_url), \
+            assert isinstance(self.page_url, (str, type(None))), f"Inconsistent shape of src_store_url and page_url!"
+        elif isinstance(self.src_store_url, (list, tuple)):
+            assert isinstance(self.page_url, (list, tuple)) and len(self.src_store_url) == len(self.page_url), \
                 f"Inconsistent shape of src_store_url and page_url!"
         else:
             raise AssertionError("Invalid type of src_store_url! Str | List[Str] expected")
+    
+    def get_title(self, element):
+        node = element.xpath(self.title_xpath)
+        return Crawler.clean_title(node[0].text) if len(node) != 0 else None
+    
+    def get_article(self, element):
+        node = element.xpath(self.article_xpath)
+        return Crawler.clean_article(node[0].text) if len(node) != 0 else None
+
+    def get_date(self, element):
+        node = element.xpath(self.date_xpath)
+        return Crawler.clean_title(node[0].text) if len(node) != 0 else None
     
     def download_src(self, url, ext, name, save_path='./'):
         self.sleep()
@@ -87,7 +123,7 @@ class Crawler(ABC):
         src = requests.get(url)
         content = io.BytesIO(src.content)
         
-        name = Crawler.clean_text(name)
+        name = Crawler.clean_title(name)
         if name.split('.')[-1] not in self.src_ext:
             name = name + '.' + ext
         if name in os.listdir(save_path):
@@ -100,7 +136,7 @@ class Crawler(ABC):
         logger.info(f'>>> {fname} has been downloaded <<<')
         
     def process_urls(self, urls, host_url):
-        if isinstance(urls, list or tuple):
+        if isinstance(urls, (list, tuple)):
             assert host_url is not None or all([not url.startswith('/') for url in urls]), \
                 f"{urls} contains some urls without prefix while host_url is None!"
         else:
@@ -113,9 +149,11 @@ class Crawler(ABC):
                 urls = [host_url + url if url.startswith('/') else url for url in urls]
         return urls
         
-    def get_src_from_store(self, src_urls, src_names, host_url=None, save_path='./'):
+    def get_src_from_store(self, pages, host_url=None, save_path='./'):
 
-        for cnt, (url, name) in enumerate(zip(src_urls, src_names)):
+        for cnt, page in enumerate(pages):
+            url = page.url
+            name = page.title
             ext = url.split('.')[-1]
             if self.args.verbose:
                 logger.info(f"Downloading from src page {cnt} - {url} - Current EXT: {ext}")
@@ -135,24 +173,24 @@ class Crawler(ABC):
     
     def get_src_urls(self, url, host_url=None):
         # get src pages from the download center(s)
-        if isinstance(url, list or tuple):
-            src_urls, src_names = [], []
+        if isinstance(url, (list, tuple)):
+            pages = []
             for url_, page_url_ in zip(url, self.page_url):
                 logger.info(f"Getting the src_urls list of center {url_}...")
-                src_urls_, src_names_ = [], []
-                src_urls_, src_names_ = self._get_src_urls(url_, page_url_)
-                src_urls += src_urls_
-                src_names += src_names_
+                pages_ = []
+                pages_ = self._get_src_urls(url_, page_url_)
+                pages += pages_
         else:
-            src_urls, src_names = self._get_src_urls(url, self.page_url)
-        src_urls = self.process_urls(src_urls, host_url)
-        return src_urls, src_names
+            pages = self._get_src_urls(url, self.page_url)
+        for page in pages:
+            page.url = self.process_urls(page.url, host_url)
+        return pages
     
     def _get_src_urls(self, url, page_url=None):
         element = self.get_etree_html(url)
 
         if page_url is None:
-            src_urls, src_names = self.get_page_src_urls(url)
+            pages = self.get_page_src_urls(url)
         else:
             if self.page_script:
                 script = element.xpath(self.page_num_xpath)[1].text
@@ -167,23 +205,24 @@ class Crawler(ABC):
                 max_page = min(max_page, 2)
                 logger.info(f"{max_page} pages totally. Set to {max_page} under debug mode.")
                 
-            src_urls, src_names = [], []
+            pages = []
             for id in range(1, max_page + 1):
-                page_src_urls, page_names = self.get_page_src_urls(page_url.format(id=id))
+                pages_ = self.get_page_src_urls(page_url.format(id=id))
                 if self.args.verbose:
                     print(f'page: {id}')
-                    print(f'page_names: {page_names}')
-                src_urls += page_src_urls
-                src_names += page_names
+                    print(f'page_names: {[page.title for page in pages_]}')
+                pages += pages_
         
-        return src_urls, src_names
+        return pages
     
     @abstractmethod 
     def get_page_src_urls(self, url):
+        # Get src-pages from a list-page
         raise NotImplementedError()
         
     @abstractmethod 
     def _get_src_from_page(self, element):
+        # Get resource files from a src-page
         raise NotImplementedError()
     
     def get_src_from_page(self, url, host_url=None):
@@ -198,14 +237,27 @@ class Crawler(ABC):
 
     def crawl_src(self, host_url=None, save_path='./'):
         if self.src_store_url is None:
-            logger.info(f"{self.name}没有资源下载网页！")
+            logger.info(f"{self.name} has no download center!")
             return
-        logger.info(f"Downloading src files for {self.name}...")
-        
-        src_urls, src_names = self.get_src_urls(self.src_store_url, host_url)
-        logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
-        self.get_src_from_store(src_urls, src_names, host_url, save_path)
-        
-        logger.info(f"Done")
+
+        if self.args.use_hbase:
+            with USTCHBase(host='localhost') as hbase:
+                self.hbase = hbase
+                logger.info(f"Downloading src files for {self.name}...")
+                
+                pages = self.get_src_urls(self.src_store_url, host_url)
+                # logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+                self.get_src_from_store(pages, host_url, save_path)
+                
+                logger.info(f"Done")
+                del self.hbase
+        else:
+            logger.info(f"Downloading src files for {self.name}...")
+                
+            pages = self.get_src_urls(self.src_store_url, host_url)
+            # logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+            self.get_src_from_store(pages, host_url, save_path)
+            
+            logger.info(f"Done")
         
         

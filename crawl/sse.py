@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler, URLContent
 
 class SSECrawler(Crawler):
     def __init__(self, args):
@@ -22,6 +22,9 @@ class SSECrawler(Crawler):
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
+        self.title_xpath = "//h1[@class='arti_title']/text()"
+        self.article_xpath = "//div[@class='wp_articlecontent']//P/text()"
+        self.date_xpath = "//span[@class='Article_PublishDate']/text()"
         
         self.check_init()
             
@@ -30,8 +33,9 @@ class SSECrawler(Crawler):
         page_src_list = element.xpath("//span[@class='Article_Title']/a")
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [a.attrib['title'] if a.attrib.has_key('title') else eval(a.attrib['sudyfile-attr'])['title'] for a in page_src_list]
-        
-        return src_urls, src_names
+        src_date = element.xpath(self.date_xpath)
+        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_names, src_date)]
+        return rslt
             
     def _get_src_from_page(self, element):
         page_src_list = element.xpath("//div[@class='entry']//a")

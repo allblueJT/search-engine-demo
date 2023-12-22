@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler, URLContent
 
 class DSCrawler(Crawler):
     def __init__(self, args):
@@ -8,6 +8,9 @@ class DSCrawler(Crawler):
         self.main_page = 'https://sds.ustc.edu.cn/main.htm'
         self.src_store_url = 'https://sds.ustc.edu.cn/15443/list.htm'
         self.page_url = None
+        self.title_xpath = "//h1[@class='arti_title']"
+        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.date_xpath = "//span[@class='Article_PublishDate']/text()"
 
         self.check_init()
 
@@ -17,8 +20,10 @@ class DSCrawler(Crawler):
         src_list = element.xpath("//div[@class='wenzhangliebiao']")[0]
         src_urls = src_list.xpath("//ul[@class='wp_article_list']/li//a/@href")
         src_names = src_list.xpath("//ul[@class='wp_article_list']/li//a/@title")
+        src_date = src_list.xpath(self.date_xpath)
         
-        return src_urls, src_names
+        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_names, src_date)]
+        return rslt
         
     def _get_src_from_page(self, element):
                 

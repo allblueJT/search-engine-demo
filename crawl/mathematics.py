@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler, URLContent
 
 class MathCrawler(Crawler):
     def __init__(self, args):
@@ -14,6 +14,9 @@ class MathCrawler(Crawler):
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
+        self.title_xpath = "//h1[@class='arti_title']"
+        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.date_xpath = "//span[@class='Article_PublishDate']/text()"
         
         self.check_init()
         
@@ -21,9 +24,11 @@ class MathCrawler(Crawler):
         element = Crawler.get_etree_html(url)
         a_src = element.xpath("//ul[@class='wp_article_list']//span[@class='Article_Title']//a")
         src_urls = [a.attrib['href'] for a in a_src]
-        src_names = [""] * len(src_urls)
+        src_names = [a.attrib['title'] for a in a_src]
+        src_date = element.xpath(self.date_xpath)
+        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_names, src_date)]
 
-        return src_urls, src_names
+        return rslt
         
             
     def _get_src_from_page(self, element):

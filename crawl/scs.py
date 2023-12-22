@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler
 
 class SCSCrawler(Crawler):
     def __init__(self, args):
@@ -15,6 +15,9 @@ class SCSCrawler(Crawler):
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
+        self.title_xpath = "//div[@class='title']/span/text()"
+        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.date_xpath = "//div[@class='fr time']/text()"
         
         self.check_init()
         

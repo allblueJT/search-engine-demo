@@ -1,6 +1,15 @@
 # search-engine-demo
 A search engine for infomation of USTC. Course: 大数据系统及综合实验
 
+### Update
+Use the following command get the files from the websites of USTC.
+```python
+python crawl_data.py --save_dir YOUR_PATH [--use_hbase] [--multi_threads] [--verbose ] [--debug]
+```
+
+***
+
+
 Use the following command to get the files from the websites of USTC.
 ```shell
 bash download_files.sh

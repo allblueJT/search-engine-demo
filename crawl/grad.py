@@ -1,4 +1,4 @@
-from crawler import Crawler
+from .crawler import Crawler
 
 class GradCrawler(Crawler):
     def __init__(self, args):
@@ -14,6 +14,9 @@ class GradCrawler(Crawler):
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
+        self.title_xpath = "//h1[@class='arti_title']"
+        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.date_xpath = "//time/@datetime"
         
         self.check_init()
             
