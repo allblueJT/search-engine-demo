@@ -4,10 +4,15 @@ from typing import List, Dict
 import logging
 
 class USTCHBase:
-    def __init__(self, host='localhost'):
+    def __init__(self, host='localhost', column_family=None):
         logging.info("HBase Connecting...")
-        self.connnection = happybase.Connection(host)        
+        self.connnection = happybase.Connection(host)    
+        self.name = 'ustc'
+        if self.name not in self.connection.tables():
+            assert column_family is not None, "Need to indicate column families to create a table"
+            self.create_table(self.name, column_family)  
         logging.info("HBase Connected Successfully!")
+        self.table = self.get_table(self.name)
         
     def __enter__(self):
         return self
@@ -20,6 +25,7 @@ class USTCHBase:
     def create_table(self, table_name: str, column_families: List[str]):
         column_families = {family : dict() for family in column_families}
         self.connnection.create_table(table_name, column_families)
+        logging.info("Table {table_name} is created.")
         
     def get_table(self, table_name: str) -> Table:
         try:
@@ -29,13 +35,13 @@ class USTCHBase:
             table = None
         return table
         
-    def put(self, table: Table, row: str, data: Dict[str, str]):
+    def put(self, row: bytes, data: Dict[bytes, bytes]):
         row = row.encode('utf-8')
         data = {k.encode('utf-8') : v.encode('utf-8') for k,v in data.items()}
-        table.put(row=row, data=data)
+        self.table.put(row=row, data=data)
         
-    def batch_put(self, table: Table, rows: List[str], data: List[Dict[str, str]]):
-        with table.batch() as bat:
+    def batch_put(self, rows: List[str], data: List[Dict[str, str]]):
+        with self.table.batch() as bat:
             for row, item in zip(rows, data):
                 row = row.encode('utf-8')
                 item = {k.encode('utf-8') : v.encode('utf-8') for k,v in item.items()}

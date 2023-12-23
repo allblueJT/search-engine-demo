@@ -1,23 +1,25 @@
 from .crawler import Crawler
+from database import URLContent
 
 class GradCrawler(Crawler):
     def __init__(self, args):
-        super().__init__(args)
         self.name = '中国科学技术大学学位与研究生教育'
+        super().__init__(self.name, args)
+        
         self.main_url = 'https://gradschool.ustc.edu.cn/'
         self.main_page = 'https://gradschool.ustc.edu.cn'
         self.center_url = 'https://gradschool.ustc.edu.cn/column/63'
         self.page_url = []
-        self.src_store_url = self.get_src_store_url(self.center_url)
+        # self.src_store_url = ['https://gradschool.ustc.edu.cn/column/10']
+        self.src_store_url = self.get_src_store_url(self.center_url) + ['https://gradschool.ustc.edu.cn/column/10'] # news
         self.page_num_xpath = "//section[@class='detail-list']//div[@class='r-box']/div/script"
+        self.page_url += [self.src_store_url[-1] + '?current={id}']
         self.page_script = True
         
-        # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
-        # self.name_holder = ""
-        self.title_xpath = "//h1[@class='arti_title']"
-        self.article_xpath = "//div[@class='wp_articlecontent']//p"
-        self.date_xpath = "//time/@datetime"
-        
+        self.title_xpath = "//div[@class='content-box']//h1/text()"
+        self.date_xpath = "//time/text()"
+        self.article_xpath_prefix = "//article//"
+
         self.check_init()
             
     def get_src_store_url(self, url):
@@ -42,14 +44,18 @@ class GradCrawler(Crawler):
         page_src_list = element.xpath("//a[@class='a-max-length']")
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [a.text for a in page_src_list]
+        src_date = element.xpath(self.date_xpath)
+        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_date, src_names)]
         
-        return src_urls, src_names
+        return rslt
             
-    def _get_src_from_page(self, element):
+    def _get_src_from_page(self, element, date):
         page_src_list = element.xpath("//div[@class='wp_articlecontent']//a")
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [eval(a.attrib['sudyfile-attr'])['title'] for a in page_src_list]
-        return src_urls, src_names
+        pages = [URLContent(url=url, date=date, title=name) for url, name \
+            in zip(src_urls, src_names)]
+        return pages
     
 
 if __name__ == '__main__':

@@ -9,6 +9,7 @@ from crawl import AutoCrawler
 
 args = get_args(asdict(CrawlerConfig()))
 crawlers = args.crawlers
+
 if args.multi_threads:
     with ThreadPoolExecutor(len(crawlers)) as t:
         for name in crawlers:

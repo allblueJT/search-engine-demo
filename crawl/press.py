@@ -1,9 +1,11 @@
-from .crawler import Crawler, URLContent
+from .crawler import Crawler
+from database import URLContent
 
 class PressCrawler(Crawler):
     def __init__(self, args):
-        super().__init__(args)
         self.name = '中国科学技术大学出版社'
+        super().__init__(self.name, args)
+        
         self.main_url = 'https://press.ustc.edu.cn/'
         self.main_page = 'https://press.ustc.edu.cn/main.htm'
         self.src_store_url = [
@@ -12,16 +14,17 @@ class PressCrawler(Crawler):
             'https://press.ustc.edu.cn/bzgf/list.htm',
             'https://press.ustc.edu.cn/wjfg/list.htm',
             'https://press.ustc.edu.cn/jxzy/list.htm',
+            'https://press.ustc.edu.cn/snxw/list.htm',  # news
         ]
         self.page_url = [url[:-4] + '{id}' + url[-4:] for url in self.src_store_url]
         self.page_num_xpath = "//em[@class='all_pages']"
         
         # self.store_2_page_list_xpath = "//div[@class='view_bg']//a"
         # self.name_holder = ""
-        self.title_xpath = "//h1[@class='title']"
-        self.article_xpath = "//div[@class='wp_articlecontent']//p"
+        self.title_xpath = "//h1[@class='title']/text()"
         self.date_xpath = "//div[@class='submitted']/text()"
-        
+        self.article_xpath_prefix = "//div[@class='wp_articlecontent']//"
+
         self.check_init()
             
     def get_page_src_urls(self, url):
@@ -30,15 +33,20 @@ class PressCrawler(Crawler):
         src_urls = [a.attrib['href'] for a in page_src_list]
         src_names = [a.text for a in page_src_list]
         src_date = element.xpath(self.date_xpath)
-        rslt = [URLContent(url, date=date, title=title) for url, date, title in zip(src_urls, src_names, src_date)]
+        rslt = [URLContent(url, date=date, title=title) for url, title, date in zip(src_urls, src_names, src_date)]
 
         return rslt
             
-    def _get_src_from_page(self, element):
-        page_src_list = element.xpath("//div[@class='wp_articlecontent']//a[@sudyfile-attr]")
-        src_urls = [a.attrib['href'] for a in page_src_list]
-        src_names = [eval(a.attrib['sudyfile-attr'])['title'] for a in page_src_list]
-        return src_urls, src_names
+    def _get_src_from_page(self, element, date):
+        try:
+            page_src_list = element.xpath("//div[@class='wp_articlecontent']//a[@sudyfile-attr]")
+            src_urls = [a.attrib['href'] for a in page_src_list]
+            src_names = [eval(a.attrib['sudyfile-attr'])['title'] for a in page_src_list]
+            pages = [URLContent(url=url, date=date, title=name) for url, name \
+                in zip(src_urls, src_names)]
+        except:
+            pages = []
+        return pages
     
 if __name__ == '__main__':
     import sys

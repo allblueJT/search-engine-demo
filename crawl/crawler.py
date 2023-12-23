@@ -6,68 +6,43 @@ import io
 import logging
 import os, sys
 import re
+import jsonlines
 from abc import ABC, abstractmethod
 from tqdm import tqdm
 from typing import List, Dict
-from database import USTCHBase
-
 sys.path.append("..")
 
+from database import USTCHBase
 from utils import get_logger, get_args
+from database import URLContent, SRC_EXT
 
-logger = get_logger(__name__, 'crawler.log')
 
-# class Sleep:
-#     def __init__(self, func):
-#         self.func = func
-#         self.visit_cnt = 0
-    
-#     def __call__(self, *args, **kwargs):
-#         if self.visit_cnt > 4:
-#             time.sleep(2 + random.random() * 4)
-#         else:
-#             self.visit_cnt += 1
-#         self.func(*args, **kwargs)
-
-class URLContent:
-    def __init__(self, url: str, date: str = None, title: str = None, article: str = None, file: bytes = None):
-        self.url = url
-        self._date = date
-        self._title = title
-        self._article = article
-        self._file = file
-        
-    @property
-    def date(self):
-        return self._data
-    @date.setter
-    def date(self, d):
-        self._date = d.encode('utf-8')
-    
 
 class Crawler(ABC):
-    def __init__(self, args):
-        self.name = None
+    def __init__(self, name, args):
+        self.name = name
         self.main_url = None
         self.main_page = None
         self.src_store_url = None
-        self.src_ext = ['doc', 'docx', 'pdf', 'txt', 'xlsx', 'xls', 'ppt', 'zip', 'tar', '7z', 'rar',
-                        'png', 'jpg', 'gif', 'jpeg']
+        
         
         self.args = args
         self.page_url = None
         self.page_num_xpath = None
         self.page_script = False    # whether max page num is in the <script>
         self.add_title = None      # TO DO
-        # self.store_2_page_list_xpath = None
-        # self.download_page_2_file_xpath = None
         self.title_xpath = None
         self.date_xpath = None
         self.article_xpath = None
+        self.text_node = ['p', 'p//*', 'ul//li', 'ul//li//*', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+        self.article_xpath_prefix = None
         
         self.visit_cnt = 0      # to control QPS, not used currently
         self.desc = "Crawler for {name}\n" \
                     "Home page: {main_page}"
+        log_dir = f'{self.args.save_dir}/log'
+        os.makedirs(log_dir, exist_ok=True)
+        self.logger = get_logger(self.name, f'{log_dir}/{self.name}.log')
         
     def __repr__(self):
         return self.desc.format(name=self.name, main_page=self.main_page)
@@ -82,14 +57,7 @@ class Crawler(ABC):
         html = response.content
         return etree.HTML(html)
     
-    @staticmethod
-    def clean_title(text):
-        return text.replace(' ', '').replace('\n', '').replace('\r', ''). \
-            replace('<br>', '_').replace('<br/>', '_').replace('<br />', '_').replace('\t', '_')
-    @staticmethod
-    def clean_article(text):
-        return text.strip().replace('<br>', '\n').replace('<br/>', '\n').replace('<br />', '\n').replace('\t', ' ').strip()
-    
+
     def check_init(self):
         if isinstance(self.src_store_url, str):
             assert isinstance(self.page_url, (str, type(None))), f"Inconsistent shape of src_store_url and page_url!"
@@ -99,41 +67,56 @@ class Crawler(ABC):
         else:
             raise AssertionError("Invalid type of src_store_url! Str | List[Str] expected")
     
-    def get_title(self, element):
-        node = element.xpath(self.title_xpath)
-        return Crawler.clean_title(node[0].text) if len(node) != 0 else None
+    # def get_title(self, element):
+    #     node = element.xpath(self.title_xpath)
+    #     return URLContent.clean_title(node[0].text) if len(node) != 0 else None
+    
+    # def get_article(self, element):
+    #     node = element.xpath(self.article_xpath)
+    #     return URLContent.clean_article(node[0].text) if len(node) != 0 else None
+
+    # def get_date(self, element):
+    #     node = element.xpath(self.date_xpath)
+    #     return URLContent.clean_title(node[0].text) if len(node) != 0 else None
     
     def get_article(self, element):
-        node = element.xpath(self.article_xpath)
-        return Crawler.clean_article(node[0].text) if len(node) != 0 else None
-
-    def get_date(self, element):
-        node = element.xpath(self.date_xpath)
-        return Crawler.clean_title(node[0].text) if len(node) != 0 else None
+        prefix = self.article_xpath_prefix
+        xp = ' | '.join([prefix + p + '/text()' for p in self.text_node])
+        texts = element.xpath(xp)
+        article = '\n'.join(texts)
+        return article
     
-    def download_src(self, url, ext, name, save_path='./'):
+    def download_src(self, page, save_path='./'):
         self.sleep()
         if not os.path.exists(save_path):
             os.mkdir(save_path)
-        if ext not in self.src_ext:
-            logger.info(f"Illegal ext to download: {url}")
-            return
-        # self.visit_cnt = Crawler.sleep(self.visit_cnt)
+        if page.ext in SRC_EXT:
+            src = requests.get(page.url)
+            page.file = io.BytesIO(src.content).read()
         
-        src = requests.get(url)
-        content = io.BytesIO(src.content)
-        
-        name = Crawler.clean_title(name)
-        if name.split('.')[-1] not in self.src_ext:
-            name = name + '.' + ext
-        if name in os.listdir(save_path):
-            logger.info(f'>>> {name} exists! Pass <<<')
+        if page.title in os.listdir(save_path):
+            self.logger.info(f'>>> {page.title} exists! Pass <<<')
             return
     
-        fname = os.path.join(save_path, name)
-        with open(fname, 'wb') as f:
-            f.write(content.read())
-        logger.info(f'>>> {fname} has been downloaded <<<')
+        
+        if self.args.use_hbase:
+            page.save_in_hbase(self.hbase)
+        else:
+            if page.file:
+                fname = os.path.join(save_path, page.title)
+                with open(fname, 'wb') as f:
+                    f.write(page.file)
+            elif page.article:
+                fname = os.path.join(save_path, page.title + '.txt')
+                with open(fname, 'w') as f:
+                    f.write(page.article)
+            else:
+                # raise RuntimeError("Article and File are both empty!")
+                self.logger.warning(f"Page:{page.url} - Article and File are both empty! pass")
+                return
+            with jsonlines.open(os.path.join(save_path, 'meta.jsonl'), 'a') as f:
+                f.write(page.as_meta_dict())
+            self.logger.info(f'>>> {fname} has been downloaded <<<')
         
     def process_urls(self, urls, host_url):
         if isinstance(urls, (list, tuple)):
@@ -152,21 +135,18 @@ class Crawler(ABC):
     def get_src_from_store(self, pages, host_url=None, save_path='./'):
 
         for cnt, page in enumerate(pages):
-            url = page.url
-            name = page.title
-            ext = url.split('.')[-1]
             if self.args.verbose:
-                logger.info(f"Downloading from src page {cnt} - {url} - Current EXT: {ext}")
+                self.logger.info(f"Downloading from src page {cnt} - {page.url} - Current EXT: {page.ext}")
                 
-            if ext not in self.src_ext:     # url directs to a page but not src file
-                cur_src_urls, cur_src_names = self.get_src_from_page(url, host_url=host_url)
+            if page.ext not in SRC_EXT:     # url directs to a page but not src file
+                pages_ = self.get_src_from_page(page, host_url=host_url)
                 if self.args.verbose:
-                    logger.info(f"Files of current page: {list(zip(cur_src_names, cur_src_urls))}")
-                for url_, name_ in zip(cur_src_urls, cur_src_names):
-                    ext_ = url_.split('.')[-1]
-                    self.download_src(url_, ext_, name_, save_path)
+                    self.logger.info(f"Files of current page: {[page_.title for page_ in pages_]}")
+                for page_ in pages_:
+                    self.download_src(page_, save_path)
+                self.download_src(page, save_path)
             else:
-                self.download_src(url, ext, name, save_path)
+                self.download_src(page, save_path)
             
             if self.args.debug and cnt >= 1:
                 break
@@ -176,7 +156,7 @@ class Crawler(ABC):
         if isinstance(url, (list, tuple)):
             pages = []
             for url_, page_url_ in zip(url, self.page_url):
-                logger.info(f"Getting the src_urls list of center {url_}...")
+                self.logger.info(f"Getting the src_urls list of center {url_}...")
                 pages_ = []
                 pages_ = self._get_src_urls(url_, page_url_)
                 pages += pages_
@@ -197,13 +177,21 @@ class Crawler(ABC):
                 
                 max_page = int(re.search("total.*?'(\d+)'", script).group(1))
             else:
-                max_page = element.xpath(self.page_num_xpath)[0]
-                max_page = int(max_page.text)
+                max_page = element.xpath(self.page_num_xpath)
+                if not max_page:
+                    self.logger.info(f"Page {url} has no items! pass")
+                    return []
+                max_page = int(max_page[0].text)
             
-            
+            if self.args.demo:
+                max_page = min(max_page, 3)
+                self.logger.info(f"Url {url} has {max_page} pages totally. Set to {max_page} for the simplity of a demo.")
+                
             if self.args.debug:
                 max_page = min(max_page, 2)
-                logger.info(f"{max_page} pages totally. Set to {max_page} under debug mode.")
+                self.logger.info(f"Url {url} has {max_page} pages totally. Set to {max_page} under debug mode.")
+                
+            
                 
             pages = []
             for id in range(1, max_page + 1):
@@ -221,43 +209,48 @@ class Crawler(ABC):
         raise NotImplementedError()
         
     @abstractmethod 
-    def _get_src_from_page(self, element):
+    def _get_src_from_page(self, element, date):
         # Get resource files from a src-page
         raise NotImplementedError()
     
-    def get_src_from_page(self, url, host_url=None):
-        url = self.process_urls(url, host_url)
-        element = Crawler.get_etree_html(url)
-        src_urls, src_names = self._get_src_from_page(element)
-        src_urls = self.process_urls(src_urls, host_url)
-        return src_urls, src_names
+    def get_src_from_page(self, page, host_url=None):
+        page.url = self.process_urls(page.url, host_url)
+        element = Crawler.get_etree_html(page.url)
+        page.article = self.get_article(element)
+        title_ = element.xpath(self.title_xpath)
+        if title_:
+            page.title = title_[0]
+        file_pages = self._get_src_from_page(element, page.date)
+        for page_ in file_pages:
+            page_.url = self.process_urls(page_.url, host_url)
+        return file_pages
     # @abstractmethod 
     # def get_nav_item(self, url):
     #     raise NotImplementedError()
 
     def crawl_src(self, host_url=None, save_path='./'):
         if self.src_store_url is None:
-            logger.info(f"{self.name} has no download center!")
+            self.logger.info(f"{self.name} has no download center!")
             return
 
         if self.args.use_hbase:
             with USTCHBase(host='localhost') as hbase:
                 self.hbase = hbase
-                logger.info(f"Downloading src files for {self.name}...")
+                self.logger.info(f"Downloading src files for {self.name}...")
                 
                 pages = self.get_src_urls(self.src_store_url, host_url)
-                # logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+                # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
                 self.get_src_from_store(pages, host_url, save_path)
                 
-                logger.info(f"Done")
+                self.logger.info(f"Done")
                 del self.hbase
         else:
-            logger.info(f"Downloading src files for {self.name}...")
+            self.logger.info(f"Downloading src files for {self.name}...")
                 
             pages = self.get_src_urls(self.src_store_url, host_url)
-            # logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+            # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
             self.get_src_from_store(pages, host_url, save_path)
             
-            logger.info(f"Done")
+            self.logger.info(f"Done")
         
         
