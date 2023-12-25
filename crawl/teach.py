@@ -32,6 +32,7 @@ class TeachCrawler(Crawler):
     def _get_src_from_page(self, element, date):
         a_node = element.xpath("//article/a")
         if a_node:
+            a_node = a_node[0]
             page = URLContent(url=a_node.attrib['href'], date=date, title=a_node.attrib['download'])
             return [page]
         else:

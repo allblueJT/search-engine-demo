@@ -9,6 +9,7 @@ from crawl import AutoCrawler
 
 args = get_args(asdict(CrawlerConfig()))
 crawlers = args.crawlers
+print(crawlers)
 
 if args.multi_threads:
     with ThreadPoolExecutor(len(crawlers)) as t:
@@ -23,5 +24,6 @@ if args.multi_threads:
             )
 else:
     for name in crawlers:
+        print(name)
         crawler = AutoCrawler.from_name(name)(args)
         crawler.crawl_src(save_path=os.path.join(args.save_dir, name), host_url=crawler.main_url)
