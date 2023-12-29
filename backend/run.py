@@ -1,33 +1,95 @@
 from flask import Flask, render_template, request
 import json
+from elasticsearch import Elasticsearch
+import happybase
+import re
+
+es = Elasticsearch(hosts='http://localhost:9200')
+
+"""
+# 以下代码均是创建索引过程（跑一次即可）
+
+doc = {
+    "mappings": {
+        "properties": {
+            "title": {
+                "type": "text"    # 使用了IK分词器
+            },
+            "url": {
+                "type": "keyword" # 不会进行分词和分析
+            },
+            "date": {
+                "type": "date"
+            },
+            "article": {
+                "type": "text"
+            }
+        }
+    }
+}
+
+def clean_date(date_str):
+    # 使用正则表达式匹配日期部分
+    match = re.search(r'\d{4}-\d{2}-\d{2}', date_str)
+    if match:
+        return match.group()
+    return date_str
+
+
+if es.indices.exists(index="idx"):
+    print('索引已存在')
+    # es.indices.delete(index="idx")
+else:
+    print('索引不存在，可以创建')
+    res = es.indices.create(index="idx", body=doc)
+
+conn = happybase.Connection('localhost', port=9090)  
+ustc_table = conn.table('ustc') 
+num = 0
+for key, data in ustc_table.scan():
+    num += 1
+    # if num >= 10:
+        # break
+    url = key.decode('utf-8')
+    article = data[b'cf0:article'].decode('utf-8')
+    date = data[b'cf0:date'].decode('utf-8')
+    date = clean_date(date)
+    title = data[b'cf0:title'].decode('utf-8')
+    es.index(index="idx", id=num, body={"url":url, "article":article, "date":date, "title":title})
+conn.close()
+"""
 
 app = Flask(__name__, static_url_path='')
 
-
 @app.route('/result', methods=['GET'])
 def result():
-    search_query = request.args.get('query')
-    if (search_query == '12'):
-        allItems = [
-            {'url': 'http://sds.ustc.edu.cn/2021/1023/c15412a526740/page.htm', 'title': '2021级数据科学硕士班组织开展新生入学教育主题班会',
-             'content': '9月28日，2021级数据科学硕士班在班长吴桐、团支书叶雨涵、组织委员朱煜等班委的组织下，在校区本部开展了新生入学教育主题班会。'},
-            {'url': 'http://sds.ustc.edu.cn/2021/1023/c15412a526740/page.htm', 'title': '2021级数据科学硕士班组织开展新生入学教育主题班会',
-             'content': '9月28日，2021级数据科学硕士班在班长吴桐、团支书叶雨涵、组织委员朱煜等班委的组织下，在校区本部开展了新生入学教育主题班会。'},
-            {'url': 'https://news.ustc.edu.cn/info/1055/85761.htm', 'title': '中国科大考点2024年全国硕士研究生招生考试顺利举行',
-             'content': '12月23至24日，2024年全国硕士研究生招生考试开考，近1400名考生在我校考点参加考试。校长包信和到考场巡考，检查指导考务，慰问考务工作人员和研招志愿者。安徽省教育招生考试院巡考人员到场巡查我校考点情况'},
-            {'url': 'https://gradschool.ustc.edu.cn/article/3004', 'title': '中科院大学培养与学位管理部来校调研研究生教育工作',
-             'content': '10月8日，为加强院属大学沟通交流，共同提升院属大学研究生教育工作水平，中科院大学培养与学位管理部乔晗部长一行6人来我校调研学位与研究生教育相关工作。研究生院常务副院长龚流柱、副院长李思敏接待了乔晗部长一行，并出席了工作座谈交流活动，研究生院相关部门负责人和业务主管参加了座谈交流会。'},
-        ]
-    else:
-        allItems = [
-            {'url': 'http://sds.ustc.edu.cn/2021/1023/c15412a526740/page.htm', 'title': '2021级数据科学硕士班组织开展新生入学教育主题班会',
-             'content': '9月28日，2021级数据科学硕士班在班长吴桐、团支书叶雨涵、组织委员朱煜等班委的组织下，在校区本部开展了新生入学教育主题班会。'},
-            {'url': 'https://news.ustc.edu.cn/info/1055/85761.htm', 'title': '中国科大考点2024年全国硕士研究生招生考试顺利举行',
-             'content': '12月23至24日，2024年全国硕士研究生招生考试开考，近1400名考生在我校考点参加考试。校长包信和到考场巡考，检查指导考务，慰问考务工作人员和研招志愿者。安徽省教育招生考试院巡考人员到场巡查我校考点情况'},
-            {'url': 'https://gradschool.ustc.edu.cn/article/3004', 'title': '中科院大学培养与学位管理部来校调研研究生教育工作',
-             'content': '10月8日，为加强院属大学沟通交流，共同提升院属大学研究生教育工作水平，中科院大学培养与学位管理部乔晗部长一行6人来我校调研学位与研究生教育相关工作。研究生院常务副院长龚流柱、副院长李思敏接待了乔晗部长一行，并出席了工作座谈交流活动，研究生院相关部门负责人和业务主管参加了座谈交流会。'},
-        ]
-    print('search_query', search_query)
+    query_string = request.args.get('query')
+
+    # 定义搜索查询
+    search_query = {
+        "query": {
+            "match": {
+                "title": query_string
+            }
+        },
+        "size": 10,  # 获取前10个匹配的文档
+        "sort": {
+            "_score": {  # 首先按照相关性得分降序排序
+                "order": "desc"
+            },
+            "date": {  # 如果相关性得分相同，再按日期降序排序
+                "order": "desc"
+            }
+        }
+    }
+
+    search_results = es.search(index="idx", body=search_query)
+    allItems = []
+    for hit in search_results['hits']['hits']:
+        result = hit['_source']
+        allItems.append({'url': result['url'], 'title': result['title'], 'content': result['article']})
+
+    # print(allItems)
 
     return json.dumps(allItems)
 

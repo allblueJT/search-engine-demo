@@ -3,22 +3,20 @@ from lxml import etree
 import time
 import random
 import io
-import logging
 import os, sys
 import re
 import jsonlines
 from abc import ABC, abstractmethod
-from tqdm import tqdm
-from typing import List, Dict
 sys.path.append("..")
 
 from database import USTCHBase
-from utils import get_logger, get_args
+from utils import get_logger
 from database import URLContent, SRC_EXT
 
 
 
 class Crawler(ABC):
+    hbase: USTCHBase = None
     def __init__(self, name, args):
         self.name = name
         self.main_url = None
@@ -43,6 +41,8 @@ class Crawler(ABC):
         log_dir = f'{self.args.save_dir}/log'
         os.makedirs(log_dir, exist_ok=True)
         self.logger = get_logger(self.name, f'{log_dir}/{self.name}.log')
+        if args.hbase and not Crawler.hbase:
+            Crawler.hbase = args.hbase
         
     def __repr__(self):
         return self.desc.format(name=self.name, main_page=self.main_page)
@@ -188,7 +188,7 @@ class Crawler(ABC):
                 self.logger.info(f"Url {url} has {max_page} pages totally. Set to {max_page} for the simplity of a demo.")
                 
             if self.args.debug:
-                max_page = min(max_page, 2)
+                max_page = min(max_page, 1)
                 self.logger.info(f"Url {url} has {max_page} pages totally. Set to {max_page} under debug mode.")
                 
             
@@ -224,6 +224,7 @@ class Crawler(ABC):
         for page_ in file_pages:
             page_.url = self.process_urls(page_.url, host_url)
         return file_pages
+    
     # @abstractmethod 
     # def get_nav_item(self, url):
     #     raise NotImplementedError()
@@ -233,24 +234,24 @@ class Crawler(ABC):
             self.logger.info(f"{self.name} has no download center!")
             return
 
-        if self.args.use_hbase:
-            with USTCHBase(host='localhost') as hbase:
-                self.hbase = hbase
-                self.logger.info(f"Downloading src files for {self.name}...")
+        # if self.args.use_hbase:
+            # with USTCHBase(host='localhost') as hbase:
+                # self.hbase = hbase
+        self.logger.info(f"Downloading src files for {self.name}...")
+        
+        pages = self.get_src_urls(self.src_store_url, host_url)
+        # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+        self.get_src_from_store(pages, host_url, save_path)
+        
+        self.logger.info(f"Done")
+        #         del self.hbase
+        # else:
+        #     self.logger.info(f"Downloading src files for {self.name}...")
                 
-                pages = self.get_src_urls(self.src_store_url, host_url)
-                # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
-                self.get_src_from_store(pages, host_url, save_path)
-                
-                self.logger.info(f"Done")
-                del self.hbase
-        else:
-            self.logger.info(f"Downloading src files for {self.name}...")
-                
-            pages = self.get_src_urls(self.src_store_url, host_url)
-            # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
-            self.get_src_from_store(pages, host_url, save_path)
+        #     pages = self.get_src_urls(self.src_store_url, host_url)
+        #     # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
+        #     self.get_src_from_store(pages, host_url, save_path)
             
-            self.logger.info(f"Done")
+        #     self.logger.info(f"Done")
         
         

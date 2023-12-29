@@ -68,6 +68,7 @@ class URLContent:
             replace('\t', ' ').replace(u'\xa0', '').strip()
     
     def save_in_hbase(self, hbase):
+        
         if self.article and len(self.article) < 15:     # Filter the blank download page
             return
         hbase.put(self.url, self.__dict__())

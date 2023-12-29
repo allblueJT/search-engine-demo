@@ -14,6 +14,8 @@ python crawl_data.py --save_dir YOUR_PATH [--use_hbase] [--multi_threads] [--ver
 To get the whole dataset stored in HBase for a demo of search engineer, run the following command:
 ```python
 python crawl_data.py --save_dir YOUR_PATH --use_hbase --multi_threads --verbose --demo
+
+python crawl_data.py --save_dir ./cache --use_hbase --verbose --demo
 ```
 
 

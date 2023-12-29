@@ -23,7 +23,6 @@ def get_args(args={}):
     args = argparse.Namespace(**args)
     parser = argparse.ArgumentParser()
     parser.add_argument("--save_dir", type=str, default='./cache')
-    # parser.add_argument("--save_dir", type=str, default='./cache')
     parser.add_argument("--use_hbase", action="store_true")
     parser.add_argument("--multi_threads", action="store_true")
     parser.add_argument("--verbose", action="store_true")

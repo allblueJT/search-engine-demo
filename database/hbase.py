@@ -1,18 +1,23 @@
 import happybase
 from happybase import Table
 from typing import List, Dict
-import logging
+import sys
+sys.path.append("..")
+from utils import get_logger
 
 class USTCHBase:
-    def __init__(self, host='localhost', column_family=None):
-        logging.info("HBase Connecting...")
-        self.connnection = happybase.Connection(host)    
+    def __init__(self, host='localhost', column_family=['cf0']):
+        self.logger = get_logger('ustc-hbase')
+        self.logger.info("HBase Connecting...")
+        self.connection = happybase.Connection(host)
+        self.connection.open()
         self.name = 'ustc'
-        if self.name not in self.connection.tables():
+        if self.name.encode() not in self.connection.tables():
             assert column_family is not None, "Need to indicate column families to create a table"
             self.create_table(self.name, column_family)  
-        logging.info("HBase Connected Successfully!")
+        self.logger.info("HBase Connected Successfully!")
         self.table = self.get_table(self.name)
+        
         
     def __enter__(self):
         return self
@@ -24,20 +29,21 @@ class USTCHBase:
         
     def create_table(self, table_name: str, column_families: List[str]):
         column_families = {family : dict() for family in column_families}
-        self.connnection.create_table(table_name, column_families)
-        logging.info("Table {table_name} is created.")
+        self.connection.create_table(table_name, column_families)
+        self.logger.info("Table {table_name} is created.")
         
     def get_table(self, table_name: str) -> Table:
         try:
-            table = self.connnection.table(table_name)
+            table = self.connection.table(table_name)
         except Exception as e:
-            logging.warning(e, exc_info=True)
+            self.logger.warning(e, exc_info=True)
             table = None
         return table
         
     def put(self, row: bytes, data: Dict[bytes, bytes]):
-        row = row.encode('utf-8')
-        data = {k.encode('utf-8') : v.encode('utf-8') for k,v in data.items()}
+        
+        for key in data.keys():
+            data[key] = data[key].encode('utf-8') if isinstance(data[key], str) else data[key]
         self.table.put(row=row, data=data)
         
     def batch_put(self, rows: List[str], data: List[Dict[str, str]]):
