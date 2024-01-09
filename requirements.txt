@@ -1,5 +1,16 @@
+# Crawler, store
 happybase==1.2.0
 jsonlines==4.0.0
 lxml==4.9.3
 Requests==2.31.0
 tqdm==4.66.1
+
+# search alg, backend
+elasticsearch==8.11.1
+Flask==3.0.0
+
+# to do 
+# datasets==2.16.1
+# sentence_transformers==2.2.2
+# transformers==4.31.0
+# peft==0.7.0

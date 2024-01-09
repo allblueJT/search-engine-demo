@@ -7,7 +7,7 @@ import os, sys
 import re
 import jsonlines
 from abc import ABC, abstractmethod
-sys.path.append("..")
+# sys.path.append("..")
 
 from database import USTCHBase
 from utils import get_logger
@@ -21,19 +21,18 @@ class Crawler(ABC):
         self.name = name
         self.main_url = None
         self.main_page = None
-        self.src_store_url = None
-        
+        self.src_store_url = None   # urls of downloading/news center
         
         self.args = args
-        self.page_url = None
-        self.page_num_xpath = None
+        self.page_url = None        # url format with page num
+        self.page_num_xpath = None  # xpath to get max-page-num
         self.page_script = False    # whether max page num is in the <script>
         self.add_title = None      # TO DO
-        self.title_xpath = None
-        self.date_xpath = None
-        self.article_xpath = None
-        self.text_node = ['p', 'p//*', 'ul//li', 'ul//li//*', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']
-        self.article_xpath_prefix = None
+        self.title_xpath = None     # xpath to get title
+        self.date_xpath = None      # xpath to get date
+        self.article_xpath = None   # xpath to get article
+        self.article_xpath_prefix = None    # # xpath to get text(part1)
+        self.text_node = ['p', 'p//*', 'ul//li', 'ul//li//*', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']   # xpath to get text(part2)
         
         self.visit_cnt = 0      # to control QPS, not used currently
         self.desc = "Crawler for {name}\n" \
@@ -234,24 +233,12 @@ class Crawler(ABC):
             self.logger.info(f"{self.name} has no download center!")
             return
 
-        # if self.args.use_hbase:
-            # with USTCHBase(host='localhost') as hbase:
-                # self.hbase = hbase
         self.logger.info(f"Downloading src files for {self.name}...")
         
         pages = self.get_src_urls(self.src_store_url, host_url)
-        # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
         self.get_src_from_store(pages, host_url, save_path)
         
         self.logger.info(f"Done")
-        #         del self.hbase
-        # else:
-        #     self.logger.info(f"Downloading src files for {self.name}...")
-                
-        #     pages = self.get_src_urls(self.src_store_url, host_url)
-        #     # self.logger.info(f"All src pages: \n{list(zip(src_names, src_urls))}")
-        #     self.get_src_from_store(pages, host_url, save_path)
-            
-        #     self.logger.info(f"Done")
+
         
         
